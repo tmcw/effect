@@ -2,18 +2,21 @@
  * @since 1.0.0
  */
 import * as Rpc from "@effect/rpc/Rpc"
+import * as RpcServer from "@effect/rpc/RpcServer"
 import { DurableDeferred } from "@effect/workflow"
 import * as Activity from "@effect/workflow/Activity"
 import * as DurableClock from "@effect/workflow/DurableClock"
 import * as Workflow from "@effect/workflow/Workflow"
 import { WorkflowEngine, WorkflowInstance } from "@effect/workflow/WorkflowEngine"
 import * as Arr from "effect/Array"
+import * as Cause from "effect/Cause"
 import * as Context from "effect/Context"
 import * as DateTime from "effect/DateTime"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
 import type * as Exit from "effect/Exit"
 import * as Fiber from "effect/Fiber"
+import * as FiberId from "effect/FiberId"
 import * as Layer from "effect/Layer"
 import * as Option from "effect/Option"
 import type * as ParseResult from "effect/ParseResult"
@@ -291,9 +294,10 @@ export const make = Effect.gen(function*() {
                 ) as any
               },
 
-              activity: Effect.fnUntraced(
-                function*(request: Entity.Request<any>) {
-                  const activityId = `${executionId}/${request.payload.name}`
+              activity(request: Entity.Request<any>) {
+                const activityId = `${executionId}/${request.payload.name}`
+                const instance = WorkflowInstance.initial(workflow, executionId)
+                return Effect.gen(function*() {
                   let entry = activities.get(activityId)
                   while (!entry) {
                     const latch = Effect.unsafeMakeLatch()
@@ -301,7 +305,6 @@ export const make = Effect.gen(function*() {
                     yield* latch.await
                     entry = activities.get(activityId)
                   }
-                  const instance = WorkflowInstance.initial(workflow, executionId)
                   const contextMap = new Map(entry.runtime.context.unsafeMap)
                   contextMap.set(Activity.CurrentAttempt.key, request.payload.attempt)
                   contextMap.set(WorkflowInstance.key, instance)
@@ -311,23 +314,29 @@ export const make = Effect.gen(function*() {
                     runtimeFlags: Runtime.defaultRuntimeFlags
                   })
                   return yield* entry.activity.executeEncoded.pipe(
-                    Effect.interruptible,
-                    Effect.onInterrupt(() => {
-                      instance.suspended = true
-                      return Effect.void
-                    }),
-                    Workflow.intoResult,
-                    Effect.provide(runtime),
-                    Effect.ensuring(Effect.sync(() => {
-                      activities.delete(activityId)
-                    }))
+                    Effect.provide(runtime)
                   )
-                },
-                Rpc.wrap({
-                  fork: true,
-                  uninterruptible: true
-                })
-              ),
+                }).pipe(
+                  Workflow.intoResult,
+                  Effect.catchAllCause((cause) => {
+                    const interruptors = Cause.interruptors(cause)
+                    // we only want to store explicit interrupts
+                    const ids = Array.from(interruptors, (id) => Array.from(FiberId.ids(id))).flat()
+                    const suspend = ids.includes(RpcServer.fiberIdClientInterrupt.id) ||
+                      ids.includes(RpcServer.fiberIdTransientInterrupt.id)
+                    return suspend ? Effect.succeed(new Workflow.Suspended()) : Effect.failCause(cause)
+                  }),
+                  Effect.provideService(WorkflowInstance, instance),
+                  Effect.provideService(Activity.CurrentAttempt, request.payload.attempt),
+                  Effect.ensuring(Effect.sync(() => {
+                    activities.delete(activityId)
+                  })),
+                  Rpc.wrap({
+                    fork: true,
+                    uninterruptible: true
+                  })
+                )
+              },
 
               deferred: Effect.fnUntraced(function*(request: Entity.Request<any>) {
                 yield* ensureSuccess(resume(workflow, executionId))

@@ -1,65 +1,48 @@
-import { Runner, RunnerAddress, ShardId, ShardStorage, SqlShardStorage } from "@effect/cluster"
+import { Runner, RunnerAddress, RunnerStorage, ShardId, SqlRunnerStorage } from "@effect/cluster"
 import { FileSystem } from "@effect/platform"
 import { NodeFileSystem } from "@effect/platform-node"
 import { SqliteClient } from "@effect/sql-sqlite-node"
 import { describe, expect, it } from "@effect/vitest"
-import { Effect, Equal, Layer, MutableHashSet, Option } from "effect"
+import { Effect, Layer } from "effect"
+import * as ShardingConfig from "../src/ShardingConfig.js"
 import { MysqlContainer } from "./fixtures/utils-mysql.js"
 import { PgContainer } from "./fixtures/utils-pg.js"
 
-const StorageLive = SqlShardStorage.layer
+const StorageLive = SqlRunnerStorage.layer
 
-describe("SqlMessageStorage", () => {
+describe("SqlRunnerStorage", () => {
   ;([
     ["pg", Layer.orDie(PgContainer.ClientLive)],
     ["mysql", Layer.orDie(MysqlContainer.ClientLive)],
     ["sqlite", Layer.orDie(SqliteLayer)]
   ] as const).forEach(([label, layer]) => {
-    it.layer(StorageLive.pipe(Layer.provideMerge(layer)), {
+    it.layer(StorageLive.pipe(Layer.provideMerge(layer), Layer.provide(ShardingConfig.layer())), {
       timeout: 60000
     })(label, (it) => {
-      it.effect("saveRunners", () =>
+      it.effect("getRunners", () =>
         Effect.gen(function*() {
-          const storage = yield* ShardStorage.ShardStorage
+          const storage = yield* RunnerStorage.RunnerStorage
 
-          yield* storage.saveRunners([[
-            runnerAddress1,
-            Runner.make({
-              address: runnerAddress1,
-              groups: ["default"],
-              version: 1
-            })
-          ]])
-          expect(yield* storage.getRunners).toEqual([[
-            runnerAddress1,
-            Runner.make({
-              address: runnerAddress1,
-              groups: ["default"],
-              version: 1
-            })
-          ]])
-        }).pipe(Effect.repeatN(2)))
+          const runner = Runner.make({
+            address: runnerAddress1,
+            groups: ["default"],
+            weight: 1
+          })
+          const machineId = yield* storage.register(runner, true)
+          yield* storage.register(runner, true)
+          expect(machineId).toEqual(1)
+          expect(yield* storage.getRunners).toEqual([[runner, true]])
 
-      it.effect("saveAssignments", () =>
-        Effect.gen(function*() {
-          const storage = yield* ShardStorage.ShardStorage
+          yield* storage.setRunnerHealth(runnerAddress1, false)
+          expect(yield* storage.getRunners).toEqual([[runner, false]])
 
-          yield* storage.saveAssignments([
-            [ShardId.make("default", 1), Option.some(runnerAddress1)],
-            [ShardId.make("default", 2), Option.none()]
-          ])
-          expect(Equal.equals(
-            yield* storage.getAssignments,
-            MutableHashSet.fromIterable([
-              [ShardId.make("default", 1), Option.some(runnerAddress1)],
-              [ShardId.make("default", 2), Option.none()]
-            ])
-          ))
-        }).pipe(Effect.repeatN(2)))
+          yield* storage.unregister(runnerAddress1)
+          expect(yield* storage.getRunners).toEqual([])
+        }))
 
       it.effect("acquireShards", () =>
         Effect.gen(function*() {
-          const storage = yield* ShardStorage.ShardStorage
+          const storage = yield* RunnerStorage.RunnerStorage
 
           let acquired = yield* storage.acquire(runnerAddress1, [
             ShardId.make("default", 1),
@@ -74,11 +57,7 @@ describe("SqlMessageStorage", () => {
           ])
           expect(acquired.map((_) => _.id)).toEqual([1, 2, 3])
 
-          const refreshed = yield* storage.refresh(runnerAddress1, [
-            ShardId.make("default", 1),
-            ShardId.make("default", 2),
-            ShardId.make("default", 3)
-          ])
+          const refreshed = yield* storage.refresh(runnerAddress1)
           expect(refreshed.map((_) => _.id)).toEqual([1, 2, 3])
 
           acquired = yield* storage.acquire(runnerAddress2, [

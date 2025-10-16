@@ -41,6 +41,7 @@ export const make = Effect.fnUntraced(function*(options?: {
   )
 
   const messageKindAckChunk = sql.literal(String(messageKind.AckChunk))
+  const messageKindInterrupt = sql.literal(String(messageKind.Interrupt))
   const replyKindWithExit = sql.literal(String(replyKind.WithExit))
 
   const messagesTable = table("messages")
@@ -284,11 +285,11 @@ export const make = Effect.fnUntraced(function*(options?: {
       )
   })
 
-  const fiveMinutesAgo = sql.onDialectOrElse({
-    mssql: () => sql.literal(`DATEADD(MINUTE, -5, GETDATE())`),
-    mysql: () => sql.literal(`NOW() - INTERVAL 5 MINUTE`),
-    pg: () => sql.literal(`NOW() - INTERVAL '5 minutes'`),
-    orElse: () => sql.literal(`DATETIME('now', '-5 minute')`)
+  const tenMinutesAgo = sql.onDialectOrElse({
+    mssql: () => sql.literal(`DATEADD(MINUTE, -10, GETDATE())`),
+    mysql: () => sql.literal(`NOW() - INTERVAL 10 MINUTE`),
+    pg: () => sql.literal(`NOW() - INTERVAL '10 minutes'`),
+    orElse: () => sql.literal(`DATETIME('now', '-10 minute')`)
   })
   const sqlNowString = sql.onDialectOrElse({
     pg: () => "NOW()",
@@ -318,7 +319,7 @@ export const make = Effect.fnUntraced(function*(options?: {
             AND (kind = ${replyKindWithExit} OR acked = ${sqlFalse})
           )
           AND m.processed = ${sqlFalse}
-          AND (m.last_read IS NULL OR m.last_read < ${fiveMinutesAgo})
+          AND (m.last_read IS NULL OR m.last_read < ${tenMinutesAgo})
           AND (m.deliver_at IS NULL OR m.deliver_at <= ${sql.literal(String(now))})
           ORDER BY m.rowid ASC
           FOR UPDATE
@@ -339,7 +340,7 @@ export const make = Effect.fnUntraced(function*(options?: {
           AND (kind = ${replyKindWithExit} OR acked = ${sqlFalse})
         )
         AND processed = ${sqlFalse}
-        AND (m.last_read IS NULL OR m.last_read < ${fiveMinutesAgo})
+        AND (m.last_read IS NULL OR m.last_read < ${tenMinutesAgo})
         AND (m.deliver_at IS NULL OR m.deliver_at <= ${sql.literal(String(now))})
         ORDER BY m.rowid ASC
       `.unprepared.pipe(
@@ -420,7 +421,10 @@ export const make = Effect.fnUntraced(function*(options?: {
 
     clearReplies: Effect.fnUntraced(
       function*(requestId) {
-        yield* sql`DELETE FROM ${repliesTableSql} WHERE request_id = ${String(requestId)}`
+        yield* sql`DELETE FROM ${repliesTableSql} WHERE request_id = ${String(requestId)} AND kind = 0`
+        yield* sql`DELETE FROM ${messagesTableSql} WHERE request_id = ${
+          String(requestId)
+        } AND kind = ${messageKindInterrupt}`
         yield* sql`UPDATE ${messagesTableSql} SET processed = ${sqlFalse}, last_reply_id = NULL, last_read = NULL WHERE request_id = ${
           String(requestId)
         }`

@@ -21,7 +21,7 @@ import type { EntityAddress } from "./EntityAddress.js"
 import * as Envelope from "./Envelope.js"
 import * as Message from "./Message.js"
 import * as Reply from "./Reply.js"
-import { ShardId } from "./ShardId.js"
+import type { ShardId } from "./ShardId.js"
 import type { ShardingConfig } from "./ShardingConfig.js"
 import * as Snowflake from "./Snowflake.js"
 
@@ -748,8 +748,9 @@ export class MemoryDriver extends Effect.Service<MemoryDriver>()("@effect/cluste
           }>()
           for (let index = 0; index < journal.length; index++) {
             const envelope = journal[index]
-            const shardId = ShardId.make(envelope.address.shardId)
-            if (!unprocessed.has(envelope as any) || !shardIds.includes(shardId.toString())) {
+            const shardId = envelope.address.shardId
+            const shardIdStr = `${shardId.group}:${shardId.id}`
+            if (!unprocessed.has(envelope as any) || !shardIds.includes(shardIdStr)) {
               continue
             }
             if (envelope._tag === "Request") {

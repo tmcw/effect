@@ -111,6 +111,11 @@ export class Runners extends Context.Tag("@effect/cluster/Runners")<Runners, {
       readonly storageOnly?: boolean | undefined
     }
   ) => Effect.Effect<void, EntityNotManagedByRunner | PersistenceError>
+
+  /**
+   * Mark a Runner as unavailable.
+   */
+  readonly onRunnerUnavailable: (address: RunnerAddress) => Effect.Effect<void>
 }>() {}
 
 /**
@@ -405,7 +410,8 @@ export const makeNoop: Effect.Effect<
 > = make({
   send: ({ message }) => Effect.fail(new EntityNotManagedByRunner({ address: message.envelope.address })),
   notify: () => Effect.void,
-  ping: () => Effect.void
+  ping: () => Effect.void,
+  onRunnerUnavailable: () => Effect.void
 })
 
 /**
@@ -610,7 +616,8 @@ export const makeRpc: Effect.Effect<
           return Effect.void
         })
       )
-    }
+    },
+    onRunnerUnavailable: (address) => RcMap.invalidate(clients, address)
   })
 })
 

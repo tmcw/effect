@@ -13,6 +13,7 @@ import type { ConfigError } from "effect/ConfigError"
 import * as Context from "effect/Context"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
+import { constVoid } from "effect/Function"
 import * as Layer from "effect/Layer"
 import * as Redacted from "effect/Redacted"
 import type * as Scope from "effect/Scope"
@@ -180,7 +181,7 @@ export const make = (
       password: options.password ? Redacted.value(options.password) : undefined,
       fetch_types: options.fetchTypes ?? true,
       prepare: options.prepare ?? true,
-      onnotice: options.onnotice,
+      onnotice: options.onnotice ?? constVoid,
       types: options.types,
       debug: options.debug,
       connection: {

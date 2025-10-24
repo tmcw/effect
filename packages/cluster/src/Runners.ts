@@ -248,6 +248,7 @@ export const make: (options: Omit<Runners["Type"], "sendLocal" | "notifyLocal">)
           for (const message of entry.messages) {
             yield* message.respond(reply)
           }
+          // wait for ack
           yield* entry.latch.await
         }
         entry.replies = []

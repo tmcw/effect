@@ -319,7 +319,6 @@ export const makeNoSerialization: <Rpcs extends Rpc.Any>(
       runtimeFlags: RuntimeFlags.disable(Runtime.defaultRuntime.runtimeFlags, RuntimeFlags.Interruption)
     })
     const fiber = Runtime.runFork(runtime, effect)
-    FiberSet.unsafeAdd(fiberSet, fiber)
     client.fibers.set(request.id, fiber)
     fiber.addObserver((exit) => {
       if (!responded && exit._tag === "Failure") {

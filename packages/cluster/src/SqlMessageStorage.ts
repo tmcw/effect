@@ -642,8 +642,7 @@ const migrations = (options?: {
               last_reply_id BIGINT,
               last_read DATETIME,
               deliver_at BIGINT,
-              UNIQUE (message_id),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (message_id)
             )
           `,
         mysql: () =>
@@ -669,8 +668,7 @@ const migrations = (options?: {
               last_read DATETIME,
               deliver_at BIGINT,
               UNIQUE (id),
-              UNIQUE (message_id),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (message_id)
             )
           `,
         pg: () =>
@@ -695,8 +693,7 @@ const migrations = (options?: {
               last_reply_id BIGINT,
               last_read TIMESTAMP,
               deliver_at BIGINT,
-              UNIQUE (message_id),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (message_id)
             )
           `.pipe(Effect.ignore),
         orElse: () =>
@@ -721,8 +718,7 @@ const migrations = (options?: {
               last_reply_id INTEGER,
               last_read TEXT,
               deliver_at INTEGER,
-              UNIQUE (message_id),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (message_id)
             )
           `
       })
@@ -794,8 +790,7 @@ const migrations = (options?: {
               sequence INT,
               acked BIT NOT NULL DEFAULT 0,
               CONSTRAINT ${sql(repliesTable + "_one_exit")} UNIQUE (request_id, kind),
-              CONSTRAINT ${sql(repliesTable + "_sequence")} UNIQUE (request_id, sequence),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              CONSTRAINT ${sql(repliesTable + "_sequence")} UNIQUE (request_id, sequence)
             )
           `,
         mysql: () =>
@@ -810,8 +805,7 @@ const migrations = (options?: {
               acked BOOLEAN NOT NULL DEFAULT FALSE,
               UNIQUE (id),
               UNIQUE (request_id, kind),
-              UNIQUE (request_id, sequence),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (request_id, sequence)
             )
           `,
         pg: () =>
@@ -825,8 +819,7 @@ const migrations = (options?: {
               sequence INT,
               acked BOOLEAN NOT NULL DEFAULT FALSE,
               UNIQUE (request_id, kind),
-              UNIQUE (request_id, sequence),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (request_id, sequence)
             )
           `,
         orElse: () =>
@@ -840,8 +833,7 @@ const migrations = (options?: {
               sequence INTEGER,
               acked BOOLEAN NOT NULL DEFAULT FALSE,
               UNIQUE (request_id, kind),
-              UNIQUE (request_id, sequence),
-              FOREIGN KEY (request_id) REFERENCES ${messagesTableSql} (id) ON DELETE CASCADE
+              UNIQUE (request_id, sequence)
             )
           `
       })

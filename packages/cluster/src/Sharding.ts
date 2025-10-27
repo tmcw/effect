@@ -505,6 +505,7 @@ const make = Effect.gen(function*() {
       Effect.scoped,
       Effect.ensuring(storageReadLock.releaseAll),
       Effect.catchAllCause((cause) => Effect.logWarning("Could not read messages from storage", cause)),
+      Effect.forever,
       Effect.annotateLogs({
         package: "@effect/cluster",
         module: "Sharding",

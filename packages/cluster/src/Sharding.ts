@@ -274,6 +274,9 @@ const make = Effect.gen(function*() {
         const acquired = yield* runnerStorage.acquire(selfAddress, unacquiredShards)
         yield* Effect.ignore(storage.resetShards(acquired))
         for (const shardId of acquired) {
+          if (MutableHashSet.has(releasingShards, shardId)) {
+            continue
+          }
           MutableHashSet.add(acquiredShards, shardId)
         }
         if (acquired.length > 0) {

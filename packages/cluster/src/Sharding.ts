@@ -77,12 +77,6 @@ export class Sharding extends Context.Tag("@effect/cluster/Sharding")<Sharding, 
   readonly getShardId: (entityId: EntityId, group: string) => ShardId
 
   /**
-   * Returns the `ShardId` of the shard to which the entity at the specified
-   * `address` is assigned.
-   */
-  readonly hasShardId: (shardId: ShardId) => boolean
-
-  /**
    * Generate a Snowflake ID that is unique to this runner.
    */
   readonly getSnowflake: Effect.Effect<Snowflake.Snowflake>
@@ -319,6 +313,7 @@ const make = Effect.gen(function*() {
         for (let i = 0; i < acquired.length; i++) {
           const shardId = acquired[i]
           if (!MutableHashSet.has(selfShards, shardId)) {
+            MutableHashSet.remove(acquiredShards, shardId)
             MutableHashSet.add(releasingShards, shardId)
           }
         }
@@ -1292,9 +1287,6 @@ const make = Effect.gen(function*() {
   const sharding = Sharding.of({
     getRegistrationEvents,
     getShardId,
-    hasShardId(shardId) {
-      return MutableHashSet.has(acquiredShards, shardId) || MutableHashSet.has(releasingShards, shardId)
-    },
     getSnowflake: Effect.sync(() => snowflakeGen.unsafeNext()),
     isShutdown: Effect.sync(() => MutableRef.get(isShutdown)),
     registerEntity,

@@ -164,10 +164,6 @@ export const make = Effect.fnUntraced(function*<
           concurrency: options.concurrency ?? 1,
           disableFatalDefects: options.disableFatalDefects,
           onFromServer(response): Effect.Effect<void> {
-            if (!options.sharding.hasShardId(address.shardId)) {
-              // eslint-disable-next-line no-console
-              console.log("RESPONSE AFTER SHUTDOWN", response)
-            }
             switch (response._tag) {
               case "Exit": {
                 const request = activeRequests.get(response.requestId)
@@ -469,6 +465,9 @@ export const make = Effect.fnUntraced(function*<
   return identity<EntityManager>({
     interruptShard,
     isProcessingFor(message, options) {
+      if (processedRequestIds.has(message.envelope.requestId)) {
+        return true
+      }
       const state = activeServers.get(message.envelope.address.entityId)
       if (!state) return false
       const request = state.activeRequests.get(message.envelope.requestId)

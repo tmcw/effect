@@ -77,6 +77,12 @@ export class Sharding extends Context.Tag("@effect/cluster/Sharding")<Sharding, 
   readonly getShardId: (entityId: EntityId, group: string) => ShardId
 
   /**
+   * Returns the `ShardId` of the shard to which the entity at the specified
+   * `address` is assigned.
+   */
+  readonly hasShardId: (shardId: ShardId) => boolean
+
+  /**
    * Generate a Snowflake ID that is unique to this runner.
    */
   readonly getSnowflake: Effect.Effect<Snowflake.Snowflake>
@@ -234,6 +240,7 @@ const make = Effect.gen(function*() {
   // This should be shutdown last, when all entities have been shutdown, to
   // allow them to move to another runner.
 
+  const releasingShards = MutableHashSet.empty<ShardId>()
   if (Option.isSome(config.runnerAddress)) {
     const selfAddress = config.runnerAddress.value
     yield* Scope.addFinalizerExit(shardingScope, () => {
@@ -241,7 +248,6 @@ const make = Effect.gen(function*() {
       return Effect.ignore(runnerStorage.releaseAll(selfAddress))
     })
 
-    const releasingShards = MutableHashSet.empty<ShardId>()
     yield* Effect.gen(function*() {
       activeShardsLatch.unsafeOpen()
 
@@ -1286,6 +1292,9 @@ const make = Effect.gen(function*() {
   const sharding = Sharding.of({
     getRegistrationEvents,
     getShardId,
+    hasShardId(shardId) {
+      return MutableHashSet.has(acquiredShards, shardId) || MutableHashSet.has(releasingShards, shardId)
+    },
     getSnowflake: Effect.sync(() => snowflakeGen.unsafeNext()),
     isShutdown: Effect.sync(() => MutableRef.get(isShutdown)),
     registerEntity,

@@ -264,7 +264,7 @@ const make = Effect.gen(function*() {
 
         if (MutableHashSet.size(releasingShards) > 0) {
           yield* Effect.forkIn(syncSingletons, shardingScope)
-          yield* releaseShardsFork
+          yield* releaseShards
         }
 
         if (MutableHashSet.size(unacquiredShards) === 0) {
@@ -274,7 +274,7 @@ const make = Effect.gen(function*() {
         const acquired = yield* runnerStorage.acquire(selfAddress, unacquiredShards)
         yield* Effect.ignore(storage.resetShards(acquired))
         for (const shardId of acquired) {
-          if (MutableHashSet.has(releasingShards, shardId)) {
+          if (MutableHashSet.has(releasingShards, shardId) || !MutableHashSet.has(selfShards, shardId)) {
             continue
           }
           MutableHashSet.add(acquiredShards, shardId)

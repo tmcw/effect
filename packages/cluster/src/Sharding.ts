@@ -310,6 +310,12 @@ const make = Effect.gen(function*() {
             MutableHashSet.add(releasingShards, shardId)
           }
         }
+        for (let i = 0; i < acquired.length; i++) {
+          const shardId = acquired[i]
+          if (!MutableHashSet.has(selfShards, shardId)) {
+            MutableHashSet.add(releasingShards, shardId)
+          }
+        }
         return MutableHashSet.size(releasingShards) > 0 ?
           Effect.andThen(
             Effect.forkIn(syncSingletons, shardingScope),

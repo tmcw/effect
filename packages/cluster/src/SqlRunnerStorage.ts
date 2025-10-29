@@ -334,8 +334,7 @@ export const make = Effect.fnUntraced(function*(options: {
             )
           ) :
           Effect.as([]),
-        PersistenceError.refail,
-        withTracerDisabled
+        PersistenceError.refail
       ),
 
     release: (address, shardId) =>

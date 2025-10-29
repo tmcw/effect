@@ -117,7 +117,7 @@ export const make = Effect.fnUntraced(function*<
     EntityState,
     EntityNotAssignedToRunner
   > = yield* ResourceMap.make(Effect.fnUntraced(function*(address: EntityAddress) {
-    if (yield* options.sharding.isShutdown) {
+    if (!options.sharding.hasShardId(address.shardId)) {
       return yield* new EntityNotAssignedToRunner({ address })
     }
 

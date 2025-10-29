@@ -77,6 +77,11 @@ export class Sharding extends Context.Tag("@effect/cluster/Sharding")<Sharding, 
   readonly getShardId: (entityId: EntityId, group: string) => ShardId
 
   /**
+   * Returns `true` if the specified `shardId` is assigned to this runner.
+   */
+  readonly hasShardId: (shardId: ShardId) => boolean
+
+  /**
    * Generate a Snowflake ID that is unique to this runner.
    */
   readonly getSnowflake: Effect.Effect<Snowflake.Snowflake>
@@ -255,6 +260,12 @@ const make = Effect.gen(function*() {
           MutableHashSet.remove(acquiredShards, shardId)
           MutableHashSet.add(releasingShards, shardId)
         }
+
+        if (MutableHashSet.size(releasingShards) > 0) {
+          yield* Effect.forkIn(syncSingletons, shardingScope)
+          yield* releaseShards
+        }
+
         // if a shard has been assigned to this runner, we acquire it
         const unacquiredShards = MutableHashSet.empty<ShardId>()
         for (const shardId of selfShards) {
@@ -262,21 +273,20 @@ const make = Effect.gen(function*() {
           MutableHashSet.add(unacquiredShards, shardId)
         }
 
-        if (MutableHashSet.size(releasingShards) > 0) {
-          yield* Effect.forkIn(syncSingletons, shardingScope)
-          yield* releaseShards
-        }
-
         if (MutableHashSet.size(unacquiredShards) === 0) {
           continue
         }
 
         const acquired = yield* runnerStorage.acquire(selfAddress, unacquiredShards)
-        yield* Effect.ignore(storage.resetShards(acquired))
+        const newShards = Arr.empty<ShardId>()
         for (const shardId of acquired) {
           if (MutableHashSet.has(releasingShards, shardId) || !MutableHashSet.has(selfShards, shardId)) {
             continue
           }
+          newShards.push(shardId)
+        }
+        yield* Effect.ignore(storage.resetShards(newShards))
+        for (const shardId of newShards) {
           MutableHashSet.add(acquiredShards, shardId)
         }
         if (acquired.length > 0) {
@@ -1287,6 +1297,10 @@ const make = Effect.gen(function*() {
   const sharding = Sharding.of({
     getRegistrationEvents,
     getShardId,
+    hasShardId(shardId: ShardId) {
+      if (isShutdown.current) return false
+      return MutableHashSet.has(acquiredShards, shardId)
+    },
     getSnowflake: Effect.sync(() => snowflakeGen.unsafeNext()),
     isShutdown: Effect.sync(() => MutableRef.get(isShutdown)),
     registerEntity,

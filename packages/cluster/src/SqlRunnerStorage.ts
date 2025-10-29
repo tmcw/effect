@@ -3,6 +3,7 @@
  */
 import * as SqlClient from "@effect/sql/SqlClient"
 import type { SqlError } from "@effect/sql/SqlError"
+import type * as Statement from "@effect/sql/Statement"
 import * as Arr from "effect/Array"
 import * as Duration from "effect/Duration"
 import * as Effect from "effect/Effect"
@@ -250,29 +251,30 @@ export const make = Effect.fnUntraced(function*(options: {
     orElse: () => (s: string) => `'${s}'`
   })
   const stringLiteral = (s: string) => sql.literal(wrapString(s))
+  const stringLiteralArr = (arr: ReadonlyArray<string>) => sql.literal(`(${arr.map(wrapString).join(",")})`)
 
   const refreshShards = sql.onDialectOrElse({
-    mysql: () => (address: string) =>
+    mysql: () => (address: string, shardIds: Statement.Fragment) =>
       sql<Array<{ shard_id: string }>>`
         UPDATE ${locksTableSql}
         SET acquired_at = ${sqlNow}
-        WHERE address = ${address};
-        SELECT shard_id FROM ${locksTableSql} WHERE address = ${address}
+        WHERE address = ${address} AND shard_id IN ${shardIds};
+        SELECT shard_id FROM ${locksTableSql} WHERE address = ${address} AND shard_id IN ${shardIds};
       `.unprepared.pipe(
         Effect.map((rows) => rows[1].map((row) => [row.shard_id]))
       ),
-    mssql: () => (address: string) =>
+    mssql: () => (address: string, shardIds: Statement.Fragment) =>
       sql`
         UPDATE ${locksTableSql}
         SET acquired_at = ${sqlNow}
         OUTPUT inserted.shard_id
-        WHERE address = ${address}
+        WHERE address = ${address} AND shard_id IN ${shardIds}
       `.values,
-    orElse: () => (address: string) =>
+    orElse: () => (address: string, shardIds: Statement.Fragment) =>
       sql`
         UPDATE ${locksTableSql}
         SET acquired_at = ${sqlNow}
-        WHERE address = ${address}
+        WHERE address = ${address} AND shard_id IN ${shardIds}
         RETURNING shard_id
       `.values
   })
@@ -310,20 +312,22 @@ export const make = Effect.fnUntraced(function*(options: {
       function*(address, shardIds) {
         const values = shardIds.map((shardId) => sql`(${stringLiteral(shardId)}, ${stringLiteral(address)}, ${sqlNow})`)
         yield* acquireLock(address, values)
-        const currentLocks = yield* sql<{ shard_id: string }>`
+        const acquired = yield* sql<{ shard_id: string }>`
           SELECT shard_id FROM ${sql(locksTable)}
-          WHERE address = ${address} AND acquired_at >= ${lockExpiresAt}
+          WHERE address = ${address}
+          AND acquired_at >= ${lockExpiresAt}
+          AND shard_id IN ${stringLiteralArr(shardIds)}
         `.values
-        return currentLocks.map((row) => row[0] as string)
+        return acquired.map((row) => row[0] as string)
       },
       sql.withTransaction,
       PersistenceError.refail,
       withTracerDisabled
     ),
 
-    refresh: (address) =>
+    refresh: (address, shardIds) =>
       sql`UPDATE ${runnersTableSql} SET last_heartbeat = ${sqlNow} WHERE address = ${address}`.pipe(
-        Effect.andThen(refreshShards(address)),
+        Effect.andThen(refreshShards(address, stringLiteralArr(shardIds))),
         Effect.map((rows) => rows.map((row) => row[0] as string)),
         PersistenceError.refail,
         withTracerDisabled

@@ -52,11 +52,11 @@ export class RunnerStorage extends Context.Tag("@effect/cluster/RunnerStorage")<
 
   /**
    * Refresh the locks owned by the given runner.
-   *
-   * Locks expire after 5 seconds, so this method should be called every 4
-   * seconds to keep the locks alive.
    */
-  readonly refresh: (address: RunnerAddress) => Effect.Effect<Array<ShardId>, PersistenceError>
+  readonly refresh: (
+    address: RunnerAddress,
+    shardIds: Iterable<ShardId>
+  ) => Effect.Effect<Array<ShardId>, PersistenceError>
 
   /**
    * Release the given shard ids.
@@ -110,7 +110,7 @@ export interface Encoded {
    * Refresh the lock on the given shards, returning the shards that were
    * successfully locked.
    */
-  readonly refresh: (address: string) => Effect.Effect<Array<string>, PersistenceError>
+  readonly refresh: (address: string, shardIds: ReadonlyArray<string>) => Effect.Effect<Array<string>, PersistenceError>
 
   /**
    * Release the lock on the given shard.
@@ -159,8 +159,8 @@ export const makeEncoded = (encoded: Encoded) =>
         Effect.map((shards) => shards.map(ShardId.fromString))
       )
     },
-    refresh: (address) =>
-      encoded.refresh(encodeRunnerAddress(address)).pipe(
+    refresh: (address, shardIds) =>
+      encoded.refresh(encodeRunnerAddress(address), Array.from(shardIds, (id) => id.toString())).pipe(
         Effect.map((shards) => shards.map(ShardId.fromString))
       ),
     release(address, shardId) {

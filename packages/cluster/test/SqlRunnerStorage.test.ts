@@ -57,8 +57,17 @@ describe("SqlRunnerStorage", () => {
           ])
           expect(acquired.map((_) => _.id)).toEqual([1, 2, 3])
 
-          const refreshed = yield* storage.refresh(runnerAddress1)
+          let refreshed = yield* storage.refresh(runnerAddress1, [
+            ShardId.make("default", 1),
+            ShardId.make("default", 2),
+            ShardId.make("default", 3)
+          ])
           expect(refreshed.map((_) => _.id)).toEqual([1, 2, 3])
+          refreshed = yield* storage.refresh(runnerAddress1, [
+            ShardId.make("default", 2),
+            ShardId.make("default", 3)
+          ])
+          expect(refreshed.map((_) => _.id)).toEqual([2, 3])
 
           acquired = yield* storage.acquire(runnerAddress2, [
             ShardId.make("default", 1),

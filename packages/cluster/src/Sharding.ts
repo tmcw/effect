@@ -12,7 +12,6 @@ import * as Effect from "effect/Effect"
 import * as Either from "effect/Either"
 import * as Equal from "effect/Equal"
 import * as Fiber from "effect/Fiber"
-import * as FiberHandle from "effect/FiberHandle"
 import * as FiberMap from "effect/FiberMap"
 import * as FiberRef from "effect/FiberRef"
 import * as FiberSet from "effect/FiberSet"
@@ -278,15 +277,11 @@ const make = Effect.gen(function*() {
         }
 
         const acquired = yield* runnerStorage.acquire(selfAddress, unacquiredShards)
-        const newShards = Arr.empty<ShardId>()
+        yield* Effect.ignore(storage.resetShards(acquired))
         for (const shardId of acquired) {
           if (MutableHashSet.has(releasingShards, shardId) || !MutableHashSet.has(selfShards, shardId)) {
             continue
           }
-          newShards.push(shardId)
-        }
-        yield* Effect.ignore(storage.resetShards(newShards))
-        for (const shardId of newShards) {
           MutableHashSet.add(acquiredShards, shardId)
         }
         if (acquired.length > 0) {
@@ -312,7 +307,12 @@ const make = Effect.gen(function*() {
     )
 
     // refresh the shard locks every `shardLockRefreshInterval`
-    yield* runnerStorage.refresh(selfAddress).pipe(
+    yield* Effect.suspend(() =>
+      runnerStorage.refresh(selfAddress, [
+        ...acquiredShards,
+        ...releasingShards
+      ])
+    ).pipe(
       Effect.flatMap((acquired) => {
         for (const shardId of acquiredShards) {
           if (!acquired.includes(shardId)) {
@@ -320,19 +320,9 @@ const make = Effect.gen(function*() {
             MutableHashSet.add(releasingShards, shardId)
           }
         }
-        for (let i = 0; i < acquired.length; i++) {
-          const shardId = acquired[i]
-          if (!MutableHashSet.has(selfShards, shardId)) {
-            MutableHashSet.remove(acquiredShards, shardId)
-            MutableHashSet.add(releasingShards, shardId)
-          }
-        }
-        return MutableHashSet.size(releasingShards) > 0 ?
-          Effect.andThen(
-            Effect.forkIn(syncSingletons, shardingScope),
-            releaseShardsFork
-          ) :
-          Effect.void
+        return MutableHashSet.size(releasingShards) > 0
+          ? activeShardsLatch.open
+          : Effect.void
       }),
       Effect.retry({
         times: 5,
@@ -367,12 +357,8 @@ const make = Effect.gen(function*() {
             ),
           { concurrency: "unbounded", discard: true }
         )
-      ).pipe(Effect.andThen(activeShardsLatch.open))
+      )
     )
-    const releaseShardsHandle = yield* FiberHandle.make()
-    const releaseShardsFork = FiberHandle.run(releaseShardsHandle, releaseShards, {
-      onlyIfMissing: true
-    })
 
     // open the shard latch every poll interval
     yield* activeShardsLatch.open.pipe(

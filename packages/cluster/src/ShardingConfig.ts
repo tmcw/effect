@@ -122,7 +122,7 @@ export const defaults: ShardingConfig["Type"] = {
   shardLockExpiration: Duration.seconds(30),
   entityMailboxCapacity: 4096,
   entityMaxIdleTime: Duration.minutes(1),
-  entityTerminationTimeout: Duration.seconds(25),
+  entityTerminationTimeout: Duration.seconds(15),
   entityMessagePollInterval: Duration.seconds(10),
   entityReplyPollInterval: Duration.millis(200),
   sendRetryInterval: Duration.millis(100),

@@ -401,7 +401,8 @@ export const make = Effect.fnUntraced(function*(options?: {
         )
       }).pipe(
         Effect.provideService(SqlClient.SafeIntegers, true),
-        PersistenceError.refail
+        PersistenceError.refail,
+        withTracerDisabled
       ),
 
     saveReply: (reply) =>
@@ -416,7 +417,8 @@ export const make = Effect.fnUntraced(function*(options?: {
         )
       }).pipe(
         Effect.asVoid,
-        PersistenceError.refail
+        PersistenceError.refail,
+        withTracerDisabled
       ),
 
     clearReplies: Effect.fnUntraced(
@@ -430,7 +432,8 @@ export const make = Effect.fnUntraced(function*(options?: {
         }`
       },
       sql.withTransaction,
-      PersistenceError.refail
+      PersistenceError.refail,
+      withTracerDisabled
     ),
 
     requestIdForPrimaryKey: (primaryKey) =>
@@ -441,7 +444,8 @@ export const make = Effect.fnUntraced(function*(options?: {
           )
         ),
         Effect.provideService(SqlClient.SafeIntegers, true),
-        PersistenceError.refail
+        PersistenceError.refail,
+        withTracerDisabled
       ),
 
     repliesFor: (requestIds) =>

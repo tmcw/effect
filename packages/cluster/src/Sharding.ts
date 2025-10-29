@@ -283,6 +283,7 @@ const make = Effect.gen(function*() {
             continue
           }
           MutableHashSet.add(acquiredShards, shardId)
+          yield* Effect.log("Acquired shard " + shardId)
         }
         if (acquired.length > 0) {
           yield* storageReadLatch.open
@@ -353,6 +354,7 @@ const make = Effect.gen(function*() {
               Effect.annotateLogs({ runner: selfAddress }),
               Effect.andThen(() => {
                 MutableHashSet.remove(releasingShards, shardId)
+                return Effect.log("Released shard " + shardId)
               })
             ),
           { concurrency: "unbounded", discard: true }

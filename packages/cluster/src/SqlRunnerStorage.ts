@@ -327,8 +327,13 @@ export const make = Effect.fnUntraced(function*(options: {
 
     refresh: (address, shardIds) =>
       sql`UPDATE ${runnersTableSql} SET last_heartbeat = ${sqlNow} WHERE address = ${address}`.pipe(
-        Effect.andThen(refreshShards(address, stringLiteralArr(shardIds))),
-        Effect.map((rows) => rows.map((row) => row[0] as string)),
+        shardIds.length > 0 ?
+          Effect.andThen(
+            refreshShards(address, stringLiteralArr(shardIds)).pipe(
+              Effect.map((rows) => rows.map((row) => row[0] as string))
+            )
+          ) :
+          Effect.as([]),
         PersistenceError.refail,
         withTracerDisabled
       ),

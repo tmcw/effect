@@ -334,6 +334,7 @@ const make = Effect.gen(function*() {
           Effect.andThen(clearSelfShards)
         )
       ),
+      Effect.withSpan("Sharding.refreshShardLocks"),
       Effect.repeat(Schedule.fixed(config.shardLockRefreshInterval)),
       Effect.forever,
       Effect.forkIn(shardingScope)

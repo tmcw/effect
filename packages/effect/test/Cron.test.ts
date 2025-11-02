@@ -8,6 +8,9 @@ const match = (input: Cron.Cron | string, date: DateTime.DateTime.Input) =>
 const next = (input: Cron.Cron | string, after?: DateTime.DateTime.Input) =>
   Cron.next(Cron.isCron(input) ? input : Cron.unsafeParse(input), after)
 
+const prev = (input: Cron.Cron | string, after?: DateTime.DateTime.Input) =>
+  Cron.prev(Cron.isCron(input) ? input : Cron.unsafeParse(input), after)
+
 describe("Cron", () => {
   it("parse", () => {
     // At 04:00 on every day-of-month from 8 through 14.
@@ -126,6 +129,68 @@ describe("Cron", () => {
     deepStrictEqual(next(Cron.unsafeParse("5 0 8 2 *", london), after), DateTime.toDateUtc(amsterdamTime))
   })
 
+  it("prev", () => {
+    const before = new Date("2024-01-04 16:21:00")
+    deepStrictEqual(prev("5 0 8 2 *", before), new Date("2023-02-08 00:05:00"))
+    deepStrictEqual(prev("15 14 1 * *", before), new Date("2024-01-01 14:15:00"))
+    deepStrictEqual(prev("23 0-20/2 * * 0", before), new Date("2023-12-31 00:23:00"))
+    deepStrictEqual(prev("5 4 * * SUN", before), new Date("2023-12-31 04:05:00"))
+    deepStrictEqual(prev("5 4 * DEC SUN", before), new Date("2023-12-31 04:05:00"))
+    deepStrictEqual(prev("30 5 0 8 2 *", before), new Date("2023-02-08 00:05:30"))
+
+    const wednesday = new Date("2025-10-22 1:00:00")
+    deepStrictEqual(prev("0 1 * * MON", wednesday), new Date("2025-10-20 1:00:00"))
+    deepStrictEqual(next("0 1 * * MON", wednesday), new Date("2025-10-27 1:00:00"))
+    deepStrictEqual(prev("0 1 * * TUE", wednesday), new Date("2025-10-21 1:00:00"))
+    deepStrictEqual(next("0 1 * * TUE", wednesday), new Date("2025-10-28 1:00:00"))
+  })
+
+  // it.only('test', () => {
+  //   const start = new Date("2020-12-28T07:05:00.000Z")
+  //   const c = Cron.prev(Cron.unsafeParse("5 2 * * 1"), start)
+
+  //   console.log(c);
+  // })
+
+  it.only.for([
+    // ["5 2 1 2 *"],
+    ["5 2 * * 1"]
+  ])("equivalence test %s", ([str]) => {
+    const start = new Date("2020-01-01 0:00:01")
+    const end = new Date("2021-01-01 0:00:01")
+
+    const getYear = (generator: IterableIterator<Date>) => {
+      const res: Array<Date> = []
+      for (const date of generator) {
+        if (date > start && date < end) {
+          res.push(date)
+        } else {
+          return res
+        }
+      }
+      return res
+    }
+
+    const fwd = getYear(Cron.sequence(Cron.unsafeParse(str), start))
+    const rev = getYear(Cron.sequenceReverse(Cron.unsafeParse(str), end)).slice().reverse()
+    
+
+    // let limit = 0;
+    // for (const date of Cron.sequenceReverse(Cron.unsafeParse(str), end)) {
+    //   console.log(date)
+    //   if (limit++ > 10) break;
+    // }
+
+    console.log('  fwd                      rev')
+    console.log({ fwd, rev })
+    for (let i = 0; i < fwd.length; i++) {
+      console.log(fwd[i].getTime() === rev[i].getTime() ? "✅" : "🚫", fwd[i], rev[i])
+    }
+
+
+    deepStrictEqual(fwd, rev.slice().reverse())
+  })
+
   it("sequence", () => {
     const start = new Date("2024-01-01 00:00:00")
     const generator = Cron.sequence(Cron.unsafeParse("23 0-20/2 * * 0"), start)
@@ -134,6 +199,17 @@ describe("Cron", () => {
     deepStrictEqual(generator.next().value, new Date("2024-01-07 04:23:00"))
     deepStrictEqual(generator.next().value, new Date("2024-01-07 06:23:00"))
     deepStrictEqual(generator.next().value, new Date("2024-01-07 08:23:00"))
+  })
+
+  it("sequenceReverse", () => {
+    const start = new Date("2024-01-01 00:00:00Z")
+    const utc = DateTime.zoneUnsafeMakeNamed("UTC")
+    const generator = Cron.sequenceReverse(Cron.unsafeParse("23 0-20/2 * * 0", utc), start)
+    deepStrictEqual(generator.next().value, new Date("2023-12-31 20:23:00Z"))
+    deepStrictEqual(generator.next().value, new Date("2023-12-31 18:23:00Z"))
+    deepStrictEqual(generator.next().value, new Date("2023-12-31 16:23:00Z"))
+    deepStrictEqual(generator.next().value, new Date("2023-12-31 14:23:00Z"))
+    deepStrictEqual(generator.next().value, new Date("2023-12-31 12:23:00Z"))
   })
 
   it("equal", () => {
